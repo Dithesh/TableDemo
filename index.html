@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Billing History - Vue.js</title>
+	<link rel="stylesheet" href="styles/main.css" />
+	<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js" defer></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+	<script src="js/main.js" defer></script>
+</head>
+
+<body>
+	<div id="app">
+		<div class="container">
+			<div class="reportHeader">
+				<div class="titleWrapper">
+					<h1>Billing History <span>{{tableData.length}} Total</span></h1>
+					<p>Here you will see your billing history.</p>
+				</div>
+
+				<div class="buttonWrapper">
+					<button @click="openModal" class="actionButton">
+						<img src="images/add.svg" alt="add icon" class="buttonIcon" /> Add
+					</button>
+					<button @click="showToast" class="actionButton">
+						<img src="images/cloud-upload.svg" alt="export icon" class="buttonIcon" />
+						Export
+					</button>
+					<button @click="downloadPDF" class="actionButton primary">
+						<img src="images/cloud-download.svg" alt="download icon" class="buttonIcon" />
+						Download
+					</button>
+				</div>
+			</div>
+
+			<!-- Table -->
+			<div class="tableWrapper">
+				<table>
+					<thead>
+						<tr>
+							<th class="pr-0 w-25 mw-25">
+								<label class="primaryCheckBox">
+									<input type="checkbox" :checked="isAllSelected"
+										:indeterminate.prop="isIndeterminate" @change="toggleSelectAll" />
+									<div class="checkboxCheckmark"></div>
+								</label>
+							</th>
+							<th @click="sortColumn('invoice')">
+								<div class="d-flex items-center c-pointer">
+									Invoice
+									<div class="sortIcon">
+										<img src="images/up.svg" alt="sort up icon"
+											:class="{active : (sortKey === 'invoice' && sortOrder === 'desc')}" />
+										<img src="images/down.svg" alt="sort down icon"
+											:class="{active : (sortKey === 'invoice' && sortOrder === 'asc')}" />
+									</div>
+								</div>
+							</th>
+							<th @click="sortColumn('billingDate')">
+								<div class="d-flex items-center c-pointer">
+									Billing Date
+									<div class="sortIcon">
+										<img src="images/up.svg" alt="sort up icon"
+											:class="{active : (sortKey === 'billingDate' && sortOrder === 'desc')}" />
+										<img src="images/down.svg" alt="sort down icon"
+											:class="{active : (sortKey === 'billingDate' && sortOrder === 'asc')}" />
+									</div>
+								</div>
+							</th>
+							<th @click="sortColumn('status')">
+								<div class="d-flex items-center c-pointer">
+									Status
+									<div class="sortIcon">
+										<img src="images/up.svg" alt="sort up icon"
+											:class="{active : (sortKey === 'status' && sortOrder === 'desc')}" />
+										<img src="images/down.svg" alt="sort down icon"
+											:class="{active : (sortKey === 'status' && sortOrder === 'asc')}" />
+									</div>
+								</div>
+							</th>
+							<th @click="sortColumn('amount')">
+								<div class="d-flex items-center c-pointer">
+									Amount
+									<div class="sortIcon">
+										<img src="images/up.svg" alt="sort up icon"
+											:class="{active : (sortKey === 'amount' && sortOrder === 'desc')}" />
+										<img src="images/down.svg" alt="sort down icon"
+											:class="{active : (sortKey === 'amount' && sortOrder === 'asc')}" />
+									</div>
+								</div>
+							</th>
+							<th @click="sortColumn('plan')">
+								<div class="d-flex items-center c-pointer">
+									Plan
+									<div class="sortIcon">
+										<img src="images/up.svg" alt="sort up icon"
+											:class="{active : (sortKey === 'plan' && sortOrder === 'desc')}" />
+										<img src="images/down.svg" alt="sort down icon"
+											:class="{active : (sortKey === 'plan' && sortOrder === 'asc')}" />
+									</div>
+								</div>
+							</th>
+							<th>&nbsp;</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="(item, index) in paginatedData" :key="item.id"
+							:class="{ selected: selectedRows.includes(item.id) }">
+							<td class="pr-0 w-25 mw-25">
+								<label class="primaryCheckBox">
+									<input type="checkbox" :checked="selectedRows.includes(item.id)"
+										@change="toggleRowSelection(item.id)" />
+									<div class="checkboxCheckmark"></div>
+								</label>
+							</td>
+							<td>
+								<div class="d-flex items-center file-box">
+									<span class="imageBox"><img src="images/file-pdf.svg" alt="pdf icon" /></span><span
+										class="fw-500">{{ item.invoice }}</span>
+								</div>
+							</td>
+							<td>
+								<div class="dateBox">{{ item.billingDate }}</div>
+							</td>
+							<td>
+								<span class="statusPill" :class="[(item.status === 'Paid') ? 'paid' : 'fail']">{{
+									item.status }}</span>
+							</td>
+							<td>{{ item.amount }}</td>
+							<td>{{ item.plan }}</td>
+							<td>
+								<button class="downloadBtn" type="button" @click="downloadPDF">
+									<img src="images/download.svg" alt="download button" />
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<!-- Pagination -->
+			<div class="pagination">
+				<div class="paginationBtnWrapper">
+					<button class="navigationBtn ml-0" :disabled="currentPage === 1"
+						@click="changePage(currentPage - 1)">
+						<img src="images/left.svg" alt="left arrow" />
+						<span>Previous</span>
+					</button>
+
+					<button class="elipsBtn" v-for="page in visiblePages" :key="page" :disabled="page === '...'"
+						:class="{ active: page === currentPage }" @click="changePage(page)">
+						{{ page }}
+					</button>
+
+					<button class="navigationBtn mr-0" :disabled="currentPage === totalPages"
+						@click="changePage(currentPage + 1)">
+						<span>Next</span>
+						<img src="images/right.svg" alt="right arrow" />
+					</button>
+				</div>
+				<div class="totalWrapper">
+					<p>
+						Showing {{paginatedData.length}} of {{tableData.length}} results
+					</p>
+				</div>
+			</div>
+		</div>
+
+		<!-- Modal -->
+		<div class="modal" v-if="showModal">
+			<div class="modal-content">
+				<h2>Add New Entry</h2>
+				<button class="closeBtn" @click="closeModal">
+					<img src="images/close.svg" alt="close icon" />
+				</button>
+				<form @submit.prevent="addEntry">
+					<div class="form-control">
+						<label>Invoice:</label>
+						<input type="text" v-model="formData.invoice" />
+						<p class="errorTxt" v-if="errors.invoice">{{errors.invoice}}</p>
+					</div>
+
+					<div class="form-control">
+						<label> Billing Date: </label>
+						<input type="date" v-model="formData.billingDate" />
+						<p class="errorTxt" v-if="errors.billingDate">
+							{{errors.billingDate}}
+						</p>
+					</div>
+					<div class="form-control">
+						<label> Status: </label>
+						<select v-model="formData.status">
+							<option value="Paid">Paid</option>
+							<option value="Failed">Failed</option>
+						</select>
+					</div>
+					<div class="form-control">
+						<label> Amount: </label>
+						<input type="number" v-model="formData.amount" />
+						<p class="errorTxt" v-if="errors.amount">{{errors.amount}}</p>
+					</div>
+					<div class="form-control">
+						<label> Plan: </label>
+						<select v-model="formData.plan">
+							<option value="Basic">Basic</option>
+							<option value="Pro">Pro</option>
+							<option value="Premium">Premium</option>
+							<option value="Elite">Elite</option>
+						</select>
+					</div>
+					<div class="form-buttons">
+						<button type="submit">Add</button>
+					</div>
+				</form>
+			</div>
+		</div>
+
+		<!-- Toast Notification -->
+		<div id="toast" class="toast">{{ toastMessage }}</div>
+	</div>
+</body>
+
+</html>
